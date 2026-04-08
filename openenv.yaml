@@ -1,8 +1,14 @@
 spec_version: 1
 name: workspace_env
-version: "1.0.0"
-description: "AI development environment for OpenEnv Hackathon"
 type: space
 runtime: fastapi
 app: server.app:app
 port: 8000
+# ADD THIS SECTION BELOW
+tasks:
+  - id: easy
+    description: "Read email and reply with the correct price from sheets."
+  - id: medium
+    description: "Check calendar for conflicts and schedule a meeting."
+  - id: hard
+    description: "Extract project code, add contact, and schedule kickoff."

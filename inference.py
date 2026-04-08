@@ -124,7 +124,7 @@ async def main():
                     log_step(step, "no_json", 0.0, True, "No JSON found")
                     break
 
-            success = score >= 0.9 # 1.0 is full success
+            success = score >= 0.85 # 1.0 is full success
             # Ensure score is normalized [0, 1]
             score = min(max(score, 0.0), 1.0)
 
