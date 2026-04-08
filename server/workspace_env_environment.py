@@ -1,12 +1,24 @@
 import uuid
-from typing import Optional, Tuple, Dict
+from typing import Optional, Tuple, Dict, Any
 from openenv.core.env_server import Environment
 from models import WorkspaceAction, WorkspaceObservation, WorkspaceState
-from graders import grade_easy, grade_medium, grade_hard
+# Relative import from the same directory (server/)
+from .graders import grade_easy, grade_medium, grade_hard
 
 class WorkspaceEnvironment(Environment):
     SUPPORTS_CONCURRENT_SESSIONS = True
     TASKS = ["easy", "medium", "hard"]
+
+    @property
+    def metadata(self) -> Dict[str, Any]:
+        """Explicitly defines tasks for the OpenEnv validator."""
+        return {
+            "tasks": [
+                {"id": "easy", "description": "Read email and reply with price from sheets."},
+                {"id": "medium", "description": "Check calendar for conflicts and schedule meeting."},
+                {"id": "hard", "description": "Extract code, add contact, and schedule kickoff."}
+            ]
+        }
 
     def __init__(self):
         self._db = WorkspaceState()
@@ -14,8 +26,10 @@ class WorkspaceEnvironment(Environment):
         self._last_status = "System Ready"
         self._selected_id = None 
         self._found_code = False
+        print("LOG: WorkspaceEnvironment Initialized", flush=True)
 
     def reset(self, task_id: str = "easy", **kwargs) -> WorkspaceObservation:
+        print(f"LOG: Resetting for task: {task_id}", flush=True)
         if task_id not in self.TASKS:
             task_id = "easy"
         self._db = WorkspaceState(task_id=task_id, step_count=0, episode_id=str(uuid.uuid4()))
@@ -118,6 +132,7 @@ class WorkspaceEnvironment(Environment):
                     reward = grade_medium(self._db)
                 else:
                     reward = grade_hard(self._db)
+                print(f"LOG: Task {self._db.task_id} done. Score: {reward}", flush=True)
 
         except Exception as e:
             error = f"Error: {str(e)}"
