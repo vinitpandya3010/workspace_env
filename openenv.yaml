@@ -6,8 +6,8 @@ app: server.app:app
 port: 8000
 tasks:
   - id: easy
-    description: "Read email and reply with price"
+    description: "Email reply task"
   - id: medium
-    description: "Schedule meeting avoiding conflicts"
+    description: "Calendar scheduling task"
   - id: hard
-    description: "Cross-app project onboarding"
+    description: "Multi-app onboarding task"

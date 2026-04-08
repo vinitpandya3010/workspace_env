@@ -10,72 +10,70 @@ class WorkspaceEnvironment(Environment):
     TASKS = ["easy", "medium", "hard"]
 
     @property
-    def metadata(self) -> Dict[str, Any]:
-        """Explicitly defines tasks for the OpenEnv validator."""
-        return {
-            "tasks": [
-                {"id": "easy", "description": "Read email and reply with price from sheets."},
-                {"id": "medium", "description": "Check calendar for conflicts and schedule meeting."},
-                {"id": "hard", "description": "Extract code, add contact, and schedule kickoff."}
-            ]
-        }
-
     def __init__(self):
         self._db = WorkspaceState()
         self._current_app = "inbox"
-        self._last_status = "System Ready"
+        self._last_status = "Ready"
         self._selected_id = None 
         self._found_code = False
-        print("LOG: WorkspaceEnvironment Initialized", flush=True)
+
+    @property
+    def metadata(self) -> Dict[str, Any]:
+        """Discovery metadata for the validator."""
+        return {
+            "tasks": [
+                {"id": "easy", "description": "Reply to email"},
+                {"id": "medium", "description": "Schedule meeting"},
+                {"id": "hard", "description": "Onboard project"}
+            ]
+        }
 
     def reset(self, task_id: str = "easy", **kwargs) -> WorkspaceObservation:
-        print(f"LOG: Resetting for task: {task_id}", flush=True)
+        # Crucial: Normalize task_id
         if task_id not in self.TASKS:
             task_id = "easy"
-        self._db = WorkspaceState(task_id=task_id, step_count=0, episode_id=str(uuid.uuid4()))
+            
+        self._db = WorkspaceState(
+            task_id=task_id, 
+            step_count=0, 
+            episode_id=str(uuid.uuid4())
+        )
         self._current_app = "inbox"
         self._selected_id = None
         self._found_code = False
-        self._last_status = "Task Started"
+        self._last_status = f"Task {task_id} started"
         
+        # Initialize different data per task
         if task_id == "easy":
-            self._db.inbox = [{"id": "e1", "from": "hr@company.com", "subject": "Policy", "body": "Check the 'Rules' sheet for the remote work policy price.", "read": False}]
-            self._db.sheets = {"Rules": [["Policy", "Fee"], ["Remote", "$50"]]}
+            self._db.inbox = [{"id": "e1", "from": "hr@co.com", "subject": "Policy", "body": "Remote price in Rules sheet", "read": False}]
+            self._db.sheets = {"Rules": [["Remote", "$50"]]}
         elif task_id == "medium":
-            self._db.inbox = [{"id": "e2", "from": "dev@corp.com", "subject": "Sync", "body": "Meet today at 2pm? Check my calendar for conflicts first.", "read": False}]
-            self._db.calendar = [{"id": "c1", "title": "Lunch", "start": "12:00", "end": "13:00"}]
+            self._db.inbox = [{"id": "e2", "from": "dev@co.com", "subject": "Sync", "body": "Meet at 2pm?", "read": False}]
+            self._db.calendar = [{"id": "c1", "title": "Lunch", "start": "12:00"}]
         elif task_id == "hard":
-            self._db.inbox = [{"id": "e3", "from": "client@partner.com", "subject": "New Project", "body": "Project X code is in 'Active_Projects' sheet. Add me to contacts and schedule for 9am tomorrow.", "read": False}]
-            self._db.sheets = {"Active_Projects": [["Name", "Code"], ["Project X", "PX-99"]]}
-            self._db.contacts = [{"name": "Admin", "email": "admin@company.com"}]
-            self._db.calendar = []
+            self._db.inbox = [{"id": "e3", "from": "client@pt.com", "subject": "Project", "body": "Add contact, code in Active_Projects, set 9am", "read": False}]
+            self._db.sheets = {"Active_Projects": [["Name", "Code"], ["X", "PX-99"]]}
+            self._db.contacts = [{"name": "Admin", "email": "admin@co.com"}]
 
         obs = self._generate_obs()
-        obs.reward = 0.05
-        obs.done = False
+        obs.reward = 0.05  # STDOUT strictly > 0
         return obs
 
     def step(self, action: WorkspaceAction, **kwargs) -> WorkspaceObservation:
         self._db.step_count += 1
-        reward = 0.01
+        reward = 0.01 # Base reward
         done = False
-        error = None
         
         cmd = action.cmd.upper()
         p = action.params
 
         try:
             if cmd == "NAV":
-                target_app = (p.get("app") or p.get("app_name") or "inbox").lower()
-                valid_apps = ["inbox", "calendar", "contacts", "sheets"]
-                if target_app in valid_apps:
-                    self._current_app = target_app
-                    self._last_status = f"Navigated to {self._current_app}"
+                target = (p.get("app") or "inbox").lower()
+                if target in ["inbox", "calendar", "contacts", "sheets"]:
+                    self._current_app = target
                     reward = 0.02
-                    if target_app == "sheets":
-                        self._found_code = True
-                else:
-                    error = f"App '{target_app}' not found."
+                    if target == "sheets": self._found_code = True
             
             elif cmd == "READ_EMAIL":
                 email_id = p.get("id") or p.get("email_id")
@@ -83,64 +81,37 @@ class WorkspaceEnvironment(Environment):
                 if email:
                     email["read"] = True
                     self._selected_id = email["id"]
-                    self._last_status = f"Viewing Email: {email['subject']}"
                     reward = 0.06
-                else:
-                    error = f"Email ID '{email_id}' not found."
-                    reward = 0.01
 
             elif cmd == "ADD_CONTACT":
-                name = p.get("name")
-                email_addr = p.get("email") or p.get("address")
-                if name and email_addr:
-                    self._db.contacts.append({"name": name, "email": email_addr})
-                    self._last_status = f"Added contact: {name}"
+                if p.get("name") and p.get("email"):
+                    self._db.contacts.append({"name": p["name"], "email": p["email"]})
                     reward = 0.15
-                else:
-                    error = "Missing name or email."
 
             elif cmd == "CREATE_EVENT":
-                title = p.get("title", "Meeting")
                 start = p.get("start") or p.get("time")
-                conflict = any(e for e in self._db.calendar if e["start"] == start)
-                if conflict:
-                    error = f"CONFLICT at {start}!"
-                    reward = 0.01
-                elif not start:
-                    error = "Missing start time."
-                else:
-                    self._db.calendar.append({"title": title, "start": start})
-                    self._last_status = f"Created event at {start}"
-                    if self._db.task_id in ["medium", "hard"]:
-                        done = True
+                if start:
+                    self._db.calendar.append({"title": p.get("title", "Meeting"), "start": start})
+                    if self._db.task_id in ["medium", "hard"]: done = True
 
             elif cmd == "REPLY":
-                if not self._selected_id:
-                    error = "READ_EMAIL first."
-                else:
-                    self._last_status = "Reply sent."
-                    if self._db.task_id == "easy":
-                        done = True
+                if self._selected_id and self._db.task_id == "easy": done = True
 
-            if self._db.step_count >= 15:
-                done = True
+            if self._db.step_count >= 15: done = True
 
             if done:
-                if self._db.task_id == "easy":
-                    reward = grade_easy(self._db)
-                elif self._db.task_id == "medium":
-                    reward = grade_medium(self._db)
-                else:
-                    reward = grade_hard(self._db)
-                print(f"LOG: Task {self._db.task_id} done. Score: {reward}", flush=True)
+                if self._db.task_id == "easy": reward = grade_easy(self._db)
+                elif self._db.task_id == "medium": reward = grade_medium(self._db)
+                else: reward = grade_hard(self._db)
 
-        except Exception as e:
-            error = f"Error: {str(e)}"
+        except Exception:
             reward = 0.01
             done = True
 
+        # Mandatory: Strictly 0 < reward < 1
         reward = max(0.01, min(0.99, reward))
-        obs = self._generate_obs(error)
+        
+        obs = self._generate_obs()
         obs.reward = float(reward)
         obs.done = bool(done)
         return obs
