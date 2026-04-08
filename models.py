@@ -4,15 +4,17 @@ from pydantic import Field
 
 class WorkspaceAction(Action):
     """Action for the Workspace environment."""
-    cmd: str = Field(..., description="Action: NAV, READ_EMAIL, SEND_EMAIL, SEARCH_CONTACTS, CREATE_EVENT, READ_SHEET")
-    params: Dict[str, Any] = Field(default_factory=dict, description="Parameters like {'id': 'e1'} or {'to': 'user@example.com'}")
+    cmd: str = Field(..., description="Action: NAV, READ_EMAIL, ADD_CONTACT, CREATE_EVENT, REPLY")
+    params: Dict[str, Any] = Field(default_factory=dict)
 
 class WorkspaceObservation(Observation):
     """What the agent sees on its screen."""
     current_app: str = Field(default="inbox")
-    view_data: str = Field(default="", description="Text representation of the current screen")
-    last_action_status: str = Field(default="")
+    view_data: str = Field(default="")
+    last_action_status: str = Field(default="success")
     error_message: Optional[str] = None
+    reward: float = Field(default=0.1) # Added this
+    done: bool = Field(default=False)   # Added this
 
 class WorkspaceState(State):
     """The full internal state for grading."""
@@ -21,3 +23,5 @@ class WorkspaceState(State):
     contacts: List[Dict[str, Any]] = []
     sheets: Dict[str, List[List[str]]] = {}
     task_id: str = "easy"
+    step_count: int = 0
+    episode_id: str = ""

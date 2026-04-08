@@ -5,9 +5,9 @@ runtime: fastapi
 app: server.app:app
 port: 8000
 tasks:
-  - id: easy
-    description: "Email reply task"
-  - id: medium
-    description: "Calendar scheduling task"
-  - id: hard
-    description: "Multi-app onboarding task"
+  - id: "easy"
+    description: "Read email and reply with price"
+  - id: "medium"
+    description: "Schedule meeting avoiding conflicts"
+  - id: "hard"
+    description: "Cross-app project onboarding"
